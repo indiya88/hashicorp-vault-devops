@@ -1,0 +1,147 @@
+# HashiCorp Vault Setup Instructions
+
+This guide walks you through setting up HashiCorp Vault using Docker with persistent storage on Windows.
+
+---
+
+## Step 1: Create a Docker Volume for Persistent Storage
+
+Vault needs persistent storage to keep secrets and data across container restarts.
+```
+```
+docker volume create vault-data
+
+
+Confirm the volume exists:
+
+docker volume ls
+```
+```
+Inside your project folder, create a configs folder and the Vault config file:
+
+
+mkdir configs
+notepad configs/vault.hcl
+```
+Paste this into vault.hcl:
+
+
+storage "file" {
+  path = "/vault/data"
+}
+
+listener "tcp" {
+  address     = "0.0.0.0:8200"
+  tls_disable = 1
+}
+
+ui = true
+```
+
+Step 3: Create Dockerfile
+In your project root folder, create a file named Dockerfile with:
+
+
+FROM hashicorp/vault:1.15
+
+COPY configs/vault.hcl /vault/config/vault.hcl
+
+EXPOSE 8200
+
+CMD ["server", "-config=/vault/config/vault.hcl"]
+```
+
+Step 4: Build Docker Image
+Run this inside your project root folder:
+
+
+docker build -t custom-vault .
+```
+Step 5: Run Vault Container
+Run Vault with persistent storage and required permissions:
+
+
+docker run -d --name vault-server `
+  --cap-add=IPC_LOCK `
+  -p 8200:8200 `
+  -v vault-data:/vault/data `
+  --user=root `
+  custom-vault
+  ```
+Step 6: Initialize Vault
+Set Vault address:
+
+
+$env:VAULT_ADDR = "http://localhost:8200"
+```
+
+Check Vault status:
+vault status
+```
+Initialize Vault (only once):
+vault operator init
+
+```
+Save the unseal keys and root token outputted by this command safely.
+
+Step 7: Unseal Vault
+Run the unseal command 3 times, each with a different unseal key:
+
+
+vault operator unseal <Unseal Key 1>
+vault operator unseal <Unseal Key 2>
+vault operator unseal <Unseal Key 3>
+Vault status should now say sealed: false.
+
+Step 8: Login as Root
+
+Log in with the root token:
+vault login <Root Token>
+```
+
+Step 9: Enable Userpass Auth Method
+
+vault auth enable userpass
+```
+Step 10: Create Users
+
+vault write auth/userpass/users/<alice> password="alicepassword" policies="default"
+vault write auth/userpass/users/<bob> password="bobpassword" policies="default"
+```
+
+Access Vault UI
+Open in your browser:
+
+
+http://localhost:8200/ui
+Login with your root token or created users.
+
+Stopping and Restarting Vault
+```
+Stop container:
+
+docker stop vault-server
+
+Start container:
+
+docker start vault-server
+```
+Remember, Vault starts sealed each time and you need to unseal again.
+
+Optional: Bind Mount Instead of Volume on Windows (If Permission Issues Occur)
+Create local folder for Vault data:
+
+
+mkdir C:\Users\indiy\Documents\ITprojects\DevOps\VaultProject\data
+Run Vault container with bind mount:
+
+
+docker run -d --name vault-server `
+  --cap-add=IPC_LOCK `
+  -p 8200:8200 `
+  -v C:\Users\indiy\Documents\ITprojects\DevOps\VaultProject\data:/vault/data `
+  --user=root `
+  custom-vault
+
+Congratulations!
+You now have Vault running securely with Docker and persistent storage. Keep your unseal keys and root token safe.
